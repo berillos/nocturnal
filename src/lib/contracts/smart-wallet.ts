@@ -3,7 +3,6 @@ import {
 	state,
 	State,
 	method,
-	UInt64,
 	Field,
 	Struct,
 	Crypto,
@@ -13,7 +12,9 @@ import {
 	UInt32,
 	Permissions,
 	type DeployArgs,
-	PublicKey
+	PublicKey,
+	AccountUpdate,
+	UInt64
 } from 'o1js';
 
 export class Secp256r1 extends createForeignCurve(Crypto.CurveParams.Secp256r1) {}
@@ -26,7 +27,13 @@ export class Operation extends Struct({
 }) {}
 
 /* ------------ Events ------------ */
-export class ApprovedEvent extends Struct({
+export class MinaSentEvent extends Struct({
+	amount: UInt64,
+	receiver: PublicKey,
+	expirySlot: UInt32,
+	nonce: UInt32
+}) {}
+export class UpdateApprovedEvent extends Struct({
 	nonce: UInt32,
 	expirySlot: UInt32
 }) {}
@@ -36,8 +43,8 @@ export class OwnerRotatedEvent extends Struct({
 	nonce: UInt32
 }) {}
 export class ValidatorChangedEvent extends Struct({
-	oldValidatorHash: PublicKey,
-	newValidatorHash: PublicKey
+	oldValidator: PublicKey,
+	newValidator: PublicKey
 }) {}
 
 /* ============================================================
@@ -50,10 +57,28 @@ export class SmartWallet extends SmartContract {
 	@state(Field) ownerCommit = State<Field>();
 
 	events = {
-		approved: ApprovedEvent,
+		updateApproved: UpdateApprovedEvent,
 		ownerRotated: OwnerRotatedEvent,
-		validatorChanged: ValidatorChangedEvent
+		validatorChanged: ValidatorChangedEvent,
+		minaSent: MinaSentEvent
 	} as const;
+
+	private hashOwner(owner: Secp256r1): Field {
+		return Poseidon.hash(Secp256r1.provable.toFields(owner));
+	}
+
+	private assertExpiry(expirySlot: UInt32) {
+		const now = this.network.globalSlotSinceGenesis;
+		now.requireBetween(UInt32.from(0), expirySlot);
+	}
+
+	private assertOwner(owner: Secp256r1) {
+		const ownerCommit = this.ownerCommit.get();
+		this.ownerCommit.requireEquals(ownerCommit);
+		const providedOwnerCommit = this.hashOwner(owner);
+		providedOwnerCommit.assertEquals(ownerCommit);
+		return ownerCommit;
+	}
 
 	@method async initialize(owner: Field) {
 		this.ownerCommit.set(owner);
@@ -70,75 +95,77 @@ export class SmartWallet extends SmartContract {
 		});
 	}
 
-	// TODO: Check if we really can't go with accepting account updates.
-	// @method async validateAndApprove(
-	// 	op: Operation,
-	// 	owner: Secp256r1,
-	// 	payload: Secp256r1.Scalar,
-	// 	signature: EcdsaP256,
-	// 	child: AccountUpdate
-	// ) {
-	// 	// Load state
-	// 	const ownerC = this.ownerCommit.get();
-	// 	this.ownerCommit.requireEquals(ownerC);
-	// 	this.account.nonce.requireEquals(op.nonce);
-	// 	const now = this.network.globalSlotSinceGenesis;
-	// 	now.requireBetween(UInt32.from(0), op.expirySlot);
-	// 	// Owner must match commitment; then verify signature against provided owner
-	// 	const _ownerCommit = Poseidon.hash(Secp256r1.provable.toFields(owner));
-	// 	_ownerCommit.assertEquals(ownerC);
-	// 	const ok: Bool = signature.verifySignedHash(payload, owner);
-	// 	ok.assertTrue();
-	// 	this.approve(child);
-	// 	this.emitEvent('approved', new ApprovedEvent({ nonce: op.nonce, expirySlot: op.expirySlot }));
-	// }
-
-	@method async validateAndApprove(
+	@method async validateAndSend(
 		op: Operation,
 		owner: Secp256r1,
 		payload: Secp256r1.Scalar,
 		signature: EcdsaP256,
-		to: PublicKey,
+		receiver: PublicKey,
 		amount: UInt64
 	) {
-		// Bind current on-chain state
-		const ownerC = this.ownerCommit.get();
-		this.ownerCommit.requireEquals(ownerC);
-
+		this.assertOwner(owner);
 		this.account.nonce.requireEquals(op.nonce);
-		const now = this.network.globalSlotSinceGenesis;
-		now.requireBetween(UInt32.from(0), op.expirySlot);
-
-		// Owner commit check + WebAuthn P-256 verify
-		const _ownerCommit = Poseidon.hash(Secp256r1.provable.toFields(owner));
-		_ownerCommit.assertEquals(ownerC);
+		this.assertExpiry(op.expirySlot);
 		signature.verifySignedHash(payload, owner).assertTrue();
-
-		// Move funds directly from the zkApp (no child AU)
-		this.send({ to, amount });
-		this.emitEvent('approved', new ApprovedEvent({ nonce: op.nonce, expirySlot: op.expirySlot }));
+		this.send({ to: receiver, amount });
+		this.emitEvent(
+			'minaSent',
+			new MinaSentEvent({ amount, receiver, nonce: op.nonce, expirySlot: op.expirySlot })
+		);
 	}
 
-	/**
-	 * rotateOwner — rotate P-256 owner using current owner's signature.
-	 */
-	@method async rotateOwner(
+	@method async validateAndChangeValidator(
 		op: Operation,
-		currentOwner: Secp256r1,
+		owner: Secp256r1,
+		payload: Secp256r1.Scalar,
+		signature: EcdsaP256,
+		validator: PublicKey
+	) {
+		this.assertOwner(owner);
+		this.account.nonce.requireEquals(op.nonce);
+		this.assertExpiry(op.expirySlot);
+		signature.verifySignedHash(payload, owner).assertTrue();
+		this.account.delegate.requireEquals(this.account.delegate.get());
+		const oldValidator = this.account.delegate.get();
+		this.account.delegate.set(validator);
+		this.emitEvent(
+			'validatorChanged',
+			new ValidatorChangedEvent({
+				oldValidator: oldValidator,
+				newValidator: validator
+			})
+		);
+	}
+
+	@method async validateAndApproveUpdate(
+		op: Operation,
+		owner: Secp256r1,
+		payload: Secp256r1.Scalar,
+		signature: EcdsaP256,
+		child: AccountUpdate
+	) {
+		this.assertOwner(owner);
+		this.account.nonce.requireEquals(op.nonce);
+		this.assertExpiry(op.expirySlot);
+		signature.verifySignedHash(payload, owner).assertTrue();
+		this.approve(child);
+		this.emitEvent(
+			'updateApproved',
+			new UpdateApprovedEvent({ nonce: op.nonce, expirySlot: op.expirySlot })
+		);
+	}
+
+	@method async validateAndRotateOwner(
+		op: Operation,
+		owner: Secp256r1,
 		payload: Secp256r1.Scalar,
 		signature: EcdsaP256,
 		newOwnerHash: Field
 	) {
-		const ownerC = this.ownerCommit.get();
-		this.ownerCommit.requireEquals(ownerC);
+		const oldHash = this.assertOwner(owner);
 		this.account.nonce.requireEquals(op.nonce);
-		const now = this.network.globalSlotSinceGenesis;
-		now.requireBetween(UInt32.from(0), op.expirySlot);
-		// Current owner must match commitment; signature must verify with current owner
-		const _ownerCommit = Poseidon.hash(Secp256r1.provable.toFields(currentOwner));
-		_ownerCommit.assertEquals(ownerC);
-		signature.verifySignedHash(payload, currentOwner).assertTrue();
-		const oldHash = ownerC;
+		this.assertExpiry(op.expirySlot);
+		signature.verifySignedHash(payload, owner).assertTrue();
 		this.ownerCommit.set(newOwnerHash);
 		this.emitEvent(
 			'ownerRotated',
@@ -146,34 +173,6 @@ export class SmartWallet extends SmartContract {
 				oldOwnerHash: oldHash,
 				newOwnerHash: newOwnerHash,
 				nonce: op.nonce
-			})
-		);
-	}
-
-	@method async changeValidator(
-		op: Operation,
-		currentOwner: Secp256r1,
-		payload: Secp256r1.Scalar,
-		signature: EcdsaP256,
-		validator: PublicKey
-	) {
-		const ownerC = this.ownerCommit.get();
-		this.ownerCommit.requireEquals(ownerC);
-		this.account.nonce.requireEquals(op.nonce);
-		const now = this.network.globalSlotSinceGenesis;
-		now.requireBetween(UInt32.from(0), op.expirySlot);
-		// Current owner must match commitment; signature must verify with current owner
-		const _ownerCommit = Poseidon.hash(Secp256r1.provable.toFields(currentOwner));
-		_ownerCommit.assertEquals(ownerC);
-		signature.verifySignedHash(payload, currentOwner).assertTrue();
-		this.account.delegate.requireEquals(this.account.delegate.get());
-		const oldValidator = this.account.delegate.get();
-		this.account.delegate.set(validator);
-		this.emitEvent(
-			'validatorChanged',
-			new ValidatorChangedEvent({
-				oldValidatorHash: oldValidator,
-				newValidatorHash: validator
 			})
 		);
 	}

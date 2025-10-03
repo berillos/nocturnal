@@ -74,13 +74,13 @@ describe('Smart Wallet', () => {
 			const payload = Secp256r1.Scalar.from(Ox.Bytes.toBigInt(Ox.Bytes.fromHex(msgHashHex)));
 			const signature = EcdsaP256.from(Ox.Signature.fromHex(SIGNATURE));
 			const paymentTx = await Mina.transaction({ sender: feePayer, fee: FEE }, async () => {
-				await smartWallet.validateAndApprove(op, owner, payload, signature, recipient, amount);
+				await smartWallet.validateAndSend(op, owner, payload, signature, recipient, amount);
 			});
 			await paymentTx.prove();
 			const txState = await paymentTx.sign([feePayer.key]).send();
 			await txState.wait();
 			const recipientAccount = Mina.getAccount(recipient);
-			expect(recipientAccount.balance.toBigInt()).toBeGreaterThan(0n);
+			expect(recipientAccount.balance.toBigInt() / 1_000_000_000n).toEqual(1001n);
 		},
 		{ timeout: 180000 }
 	);
@@ -100,7 +100,7 @@ describe('Smart Wallet', () => {
 			);
 			const signature = EcdsaP256.from(Ox.Signature.fromHex(SIGNATURE));
 			const stakeTx = await Mina.transaction({ sender: feePayer, fee: FEE }, async () => {
-				await smartWallet.changeValidator(op, owner, payload, signature, validator);
+				await smartWallet.validateAndChangeValidator(op, owner, payload, signature, validator);
 			});
 			await stakeTx.prove();
 			await stakeTx.sign([feePayer.key]).send();
