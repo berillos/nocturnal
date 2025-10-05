@@ -10,35 +10,28 @@ The next chapter of Mina Protocol wallets. Hot wallets are dangerous, so we've d
 
 ## Roadmap
 
-- Devnet launch - *quite soon*™.
-- Mainnet launch - *hopefully soon*™.
-- in-zkApp Wallet SDK - Enable zkApp user to create a dedicated wallet for your zkApp with a Passkey.
-- Wallet Interface - Integrate your zkApp with our wallet.
-- BerID - Our very own name service. Mint your custom name for your account.
-- Mina Fungible Tokens and NFTs support.
+- **Devnet launch** - *quite soon*™.
+- **Mainnet launch** - *hopefully soon*™.
+- **in-zkApp Wallet SDK** - Enable zkApp user to create a dedicated wallet for your zkApp with a Passkey.
+- **Wallet Interface** - Integrate your zkApp with our wallet.
+- **BerID** - Our very own name service. Mint your custom name for your account.
+- **Mina Fungible Tokens** and **NFTs** support.
 
 ## Architecture overview
 
 ```mermaid
 flowchart LR
   U((User))
-  PWA[SvelteKit PWA\n+ ORPC API]
-  R[Runner App\n(bullmq workers + o1js)]
+  PWA[PWA - SvelteKit + ORPC]
+  R[Runner - BullMQ + ORPC + o1js]
   SQL[(SQLite)]
-  REDIS[(Redis\n(bullmq))]
+  REDIS[(Redis / BullMQ)]
 
-  %% Core interactions
-  U --> PWA
-  PWA <-->|CRUD: users, accounts, passkeys| SQL
-
-  %% Job flow
-  PWA -->|enqueue job| REDIS
-  R -->|consume job| REDIS
-  R -->|publish progress/result| REDIS
-  PWA -->|subscribe/read progress| REDIS
-
-  %% Persist results
-  PWA -->|write final state| SQL
+  U <--> PWA
+  PWA <--> SQL
+  R <--> REDIS
+  R <--> SQL
+  PWA <--> R
 ```
 
 ## Development
