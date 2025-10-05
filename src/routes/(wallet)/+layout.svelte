@@ -1,6 +1,6 @@
 <script lang="ts">
 	import WalletSidebar from '$lib/components/wallet-sidebar.svelte';
-	import type { Snippet } from 'svelte';
+	import { type Snippet } from 'svelte';
 
 	let { children }: { children: Snippet } = $props();
 </script>

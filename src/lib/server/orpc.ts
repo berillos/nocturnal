@@ -1,5 +1,5 @@
 import { os } from '@orpc/server';
-import type { db } from './db';
+import type { Database } from './db';
 import type { Session, User } from 'better-auth';
 
 export const base = os
@@ -11,7 +11,7 @@ export const base = os
 		FORBIDDEN: {}
 	})
 	.$context<{
-		db: typeof db;
+		db: Database;
 		user?: User | undefined;
 		session?: Session | undefined;
 	}>();

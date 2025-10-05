@@ -1,0 +1,13 @@
+{
+	"version": 1,
+	"deployAliases": {
+		"berillos-smart-wallet": {
+			"networkId": "testnet",
+			"url": "https://api.minascan.io/node/devnet/v1/graphql",
+			"keyPath": "keys/berillos-smart-wallet.json",
+			"feepayerKeyPath": "/home/ryuz/Boxes/arch/.cache/zkapp-cli/keys/berillos-fee-payer.json",
+			"feepayerAlias": "berillos-fee-payer",
+			"fee": "0.1"
+		}
+	}
+}

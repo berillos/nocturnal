@@ -1,3 +1,4 @@
+import type { Database } from '$lib/server/db';
 import type { Session, User } from 'better-auth';
 
 // See https://svelte.dev/docs/kit/types#app.d.ts
@@ -6,6 +7,7 @@ declare global {
 	namespace App {
 		// interface Error {}
 		interface Locals {
+			db: Database;
 			user?: User | undefined;
 			session?: Session | undefined;
 		}

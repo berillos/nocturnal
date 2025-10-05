@@ -47,6 +47,9 @@ export class ValidatorChangedEvent extends Struct({
 	newValidator: PublicKey
 }) {}
 
+// @ts-expect-error - can't use AlmostForeignField as it's not provable
+type Secp256r1Scalar = Secp256r1.Scalar;
+
 /* ============================================================
  * SmartWallet — state-packed AA wallet
  *  - Stores only hash(owner) instead of (x,y)
@@ -98,7 +101,7 @@ export class SmartWallet extends SmartContract {
 	@method async validateAndSend(
 		op: Operation,
 		owner: Secp256r1,
-		payload: Secp256r1.Scalar,
+		payload: Secp256r1Scalar,
 		signature: EcdsaP256,
 		receiver: PublicKey,
 		amount: UInt64
@@ -117,7 +120,7 @@ export class SmartWallet extends SmartContract {
 	@method async validateAndChangeValidator(
 		op: Operation,
 		owner: Secp256r1,
-		payload: Secp256r1.Scalar,
+		payload: Secp256r1Scalar,
 		signature: EcdsaP256,
 		validator: PublicKey
 	) {
@@ -140,7 +143,7 @@ export class SmartWallet extends SmartContract {
 	@method async validateAndApproveUpdate(
 		op: Operation,
 		owner: Secp256r1,
-		payload: Secp256r1.Scalar,
+		payload: Secp256r1Scalar,
 		signature: EcdsaP256,
 		child: AccountUpdate
 	) {
@@ -158,7 +161,7 @@ export class SmartWallet extends SmartContract {
 	@method async validateAndRotateOwner(
 		op: Operation,
 		owner: Secp256r1,
-		payload: Secp256r1.Scalar,
+		payload: Secp256r1Scalar,
 		signature: EcdsaP256,
 		newOwnerHash: Field
 	) {

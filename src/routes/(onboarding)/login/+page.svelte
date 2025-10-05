@@ -45,14 +45,14 @@
 					.with(
 						{ formMode: 'verify' },
 						async ({ values }: { values: z.infer<typeof VerifySchema> }) => {
-							const { data, error } = await authClient.signIn.emailOtp({
+							const { error } = await authClient.signIn.emailOtp({
 								email: values.email,
 								otp: values.otp
 							});
 							if (error) {
 								return toast.error(error?.message ?? 'Authentication Error');
 							}
-							return goto('/passkey');
+							return goto('/deploy', { invalidateAll: true });
 						}
 					)
 					.exhaustive();

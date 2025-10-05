@@ -91,54 +91,17 @@ export const passkey = sqliteTable('passkey', {
 });
 
 export const wallet = sqliteTable('wallet', {
-	id: text('id').primaryKey(), // uuid
-	address: text('address').notNull().unique(), // Mina zkApp public key
-	chainId: text('chain_id').notNull(), // network binding
+	id: text('id')
+		.primaryKey()
+		.$defaultFn(() => crypto.randomUUID()),
+	address: text('address').unique(),
+	chainId: text('chain_id', { enum: ['devnet', 'mainnet'] }).notNull(), // network binding
+	state: text('state', { enum: ['initializing', 'deployed'] })
+		.notNull()
+		.default('initializing'),
 	ownerPasskeyId: text('owner_passkey_id')
 		.notNull()
 		.references(() => passkey.id, { onDelete: 'cascade' }),
-	userId: text('user_id')
-		.notNull()
-		.references(() => user.id, { onDelete: 'cascade' }),
-	createdAt: integer('created_at', { mode: 'timestamp' })
-		.default(sql`(strftime('%s','now'))`)
-		.notNull(),
-	updatedAt: integer('updated_at', { mode: 'timestamp' })
-		.default(sql`(strftime('%s','now'))`)
-		.$onUpdate(() => new Date())
-		.notNull()
-});
-
-export const userOperation = sqliteTable('user_operation', {
-	id: text('id').primaryKey(), // uuid
-	walletId: text('wallet_id')
-		.notNull()
-		.references(() => wallet.id, { onDelete: 'cascade' }),
-	nonce: integer('nonce').notNull(),
-	expirySlot: integer('expiry_slot').notNull(),
-	childAccountUpdates: text('child_account_updates', { mode: 'json' }).notNull(),
-	challenge: text('challenge').notNull(),
-	payload: text('payload').notNull(),
-	signature: text('signature').notNull(),
-	status: text('status').default('pending').notNull(), // pending | verified | bundled | failed
-	createdAt: integer('created_at', { mode: 'timestamp' })
-		.default(sql`(strftime('%s','now'))`)
-		.notNull(),
-	updatedAt: integer('updated_at', { mode: 'timestamp' })
-		.default(sql`(strftime('%s','now'))`)
-		.$onUpdate(() => new Date())
-		.notNull()
-});
-
-export const transaction = sqliteTable('transaction', {
-	id: text('id').primaryKey(), // uuid
-	userOperationId: text('user_operation_id').references(() => userOperation.id, {
-		onDelete: 'set null'
-	}),
-	txHash: text('tx_hash').notNull().unique(),
-	status: text('status').default('broadcast').notNull(), // broadcast | confirmed | failed
-	feePayer: text('fee_payer').notNull(),
-	includedAt: integer('included_at', { mode: 'timestamp' }),
 	createdAt: integer('created_at', { mode: 'timestamp' })
 		.default(sql`(strftime('%s','now'))`)
 		.notNull(),
@@ -150,6 +113,10 @@ export const transaction = sqliteTable('transaction', {
 
 /* ========== Relations ========== */
 
+export const userRelations = relations(user, ({ many }) => ({
+	passkeys: many(passkey)
+}));
+
 export const passkeyRelations = relations(passkey, ({ one, many }) => ({
 	user: one(user, {
 		fields: [passkey.userId],
@@ -158,30 +125,10 @@ export const passkeyRelations = relations(passkey, ({ one, many }) => ({
 	wallets: many(wallet)
 }));
 
-export const walletRelations = relations(wallet, ({ one, many }) => ({
-	user: one(user, {
-		fields: [wallet.userId],
-		references: [user.id]
-	}),
-	ownerPasskey: one(passkey, {
+export const walletRelations = relations(wallet, ({ one }) => ({
+	passkey: one(passkey, {
 		fields: [wallet.ownerPasskeyId],
 		references: [passkey.id]
-	}),
-	operations: many(userOperation)
-}));
-
-export const userOperationRelations = relations(userOperation, ({ one, many }) => ({
-	wallet: one(wallet, {
-		fields: [userOperation.walletId],
-		references: [wallet.id]
-	}),
-	transactions: many(transaction)
-}));
-
-export const transactionRelations = relations(transaction, ({ one }) => ({
-	userOperation: one(userOperation, {
-		fields: [transaction.userOperationId],
-		references: [userOperation.id]
 	})
 }));
 
@@ -189,10 +136,6 @@ export const transactionRelations = relations(transaction, ({ one }) => ({
 
 export const WalletSelectSchema = createSelectSchema(wallet);
 export const WalletInsertSchema = createInsertSchema(wallet);
-export const UserOperationSelectSchema = createSelectSchema(userOperation);
-export const UserOperationInsertSchema = createInsertSchema(userOperation);
-export const TransactionSelectSchema = createSelectSchema(transaction);
-export const TransactionInsertSchema = createInsertSchema(transaction);
 
 /* ========== Export bundle ========== */
 
@@ -203,6 +146,7 @@ export const schema = {
 	verification,
 	passkey,
 	wallet,
-	userOperation,
-	transaction
+	userRelations,
+	passkeyRelations,
+	walletRelations
 };

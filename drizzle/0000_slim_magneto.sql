@@ -43,19 +43,6 @@ CREATE TABLE `session` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `session_token_unique` ON `session` (`token`);--> statement-breakpoint
-CREATE TABLE `transaction` (
-	`id` text PRIMARY KEY NOT NULL,
-	`user_operation_id` text,
-	`tx_hash` text NOT NULL,
-	`status` text DEFAULT 'broadcast' NOT NULL,
-	`fee_payer` text NOT NULL,
-	`included_at` integer,
-	`created_at` integer DEFAULT (strftime('%s','now')) NOT NULL,
-	`updated_at` integer DEFAULT (strftime('%s','now')) NOT NULL,
-	FOREIGN KEY (`user_operation_id`) REFERENCES `user_operation`(`id`) ON UPDATE no action ON DELETE set null
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `transaction_tx_hash_unique` ON `transaction` (`tx_hash`);--> statement-breakpoint
 CREATE TABLE `user` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -67,21 +54,6 @@ CREATE TABLE `user` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `user_email_unique` ON `user` (`email`);--> statement-breakpoint
-CREATE TABLE `user_operation` (
-	`id` text PRIMARY KEY NOT NULL,
-	`wallet_id` text NOT NULL,
-	`nonce` integer NOT NULL,
-	`expiry_slot` integer NOT NULL,
-	`child_account_updates` text NOT NULL,
-	`challenge` text NOT NULL,
-	`payload` text NOT NULL,
-	`signature` text NOT NULL,
-	`status` text DEFAULT 'pending' NOT NULL,
-	`created_at` integer DEFAULT (strftime('%s','now')) NOT NULL,
-	`updated_at` integer DEFAULT (strftime('%s','now')) NOT NULL,
-	FOREIGN KEY (`wallet_id`) REFERENCES `wallet`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
 CREATE TABLE `verification` (
 	`id` text PRIMARY KEY NOT NULL,
 	`identifier` text NOT NULL,
@@ -93,14 +65,13 @@ CREATE TABLE `verification` (
 --> statement-breakpoint
 CREATE TABLE `wallet` (
 	`id` text PRIMARY KEY NOT NULL,
-	`address` text NOT NULL,
+	`address` text,
 	`chain_id` text NOT NULL,
+	`state` text DEFAULT 'initializing' NOT NULL,
 	`owner_passkey_id` text NOT NULL,
-	`user_id` text NOT NULL,
 	`created_at` integer DEFAULT (strftime('%s','now')) NOT NULL,
 	`updated_at` integer DEFAULT (strftime('%s','now')) NOT NULL,
-	FOREIGN KEY (`owner_passkey_id`) REFERENCES `passkey`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`owner_passkey_id`) REFERENCES `passkey`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `wallet_address_unique` ON `wallet` (`address`);

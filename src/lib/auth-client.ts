@@ -18,6 +18,6 @@ export function getOnboardingStep(state: {
 	return match(state)
 		.with({ signedIn: true, hasPasskey: true, hasWallet: true }, () => '/dashboard')
 		.with({ signedIn: true, hasPasskey: true, hasWallet: false }, () => '/deploy')
-		.with({ signedIn: true, hasPasskey: false, hasWallet: false }, () => '/passkey')
+		.with({ signedIn: true, hasPasskey: false, hasWallet: false }, () => '/deploy')
 		.otherwise(() => '/login');
 }
