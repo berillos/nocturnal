@@ -80,7 +80,7 @@
 				{@const active = sidebarElement.href === page.url.pathname}
 				<a
 					href={sidebarElement.href}
-					class={clsx('btn justify-start', active ? 'btn-neutral' : 'btn-ghost')}
+					class={clsx('btn justify-start p-2', active ? 'btn-neutral' : 'btn-ghost')}
 				>
 					<sidebarElement.icon size={20} />
 					<span>{sidebarElement.label}</span>

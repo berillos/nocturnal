@@ -1,38 +1,66 @@
-# sv
+# Codename Nocturnal
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+The next chapter of Mina Protocol wallets. Hot wallets are dangerous, so we've decided to build a next generation wallet that is a lot more secure.
 
-## Creating a project
+## Features
 
-If you're seeing this, you've probably already done this step. Congrats!
+- 🔑 **Private Key-less** - No need to worry about mnemonics. Based on Passkeys. The private key resides in the secure enclave or on a YubiKey.
+- 🪙 **Fee-less** - The transaction fees are for now sponsored by us.
+- 📱 **Progressive Web App** - Accessible from any device with a browser. Install it and use as you'd use a mobile app on your phone.
 
-```sh
-# create a new project in the current directory
-npx sv create
+## Roadmap
 
-# create a new project in my-app
-npx sv create my-app
+- Devnet launch - *quite soon*™.
+- Mainnet launch - *hopefully soon*™.
+- in-zkApp Wallet SDK - Enable zkApp user to create a dedicated wallet for your zkApp with a Passkey.
+- Wallet Interface - Integrate your zkApp with our wallet.
+- BerID - Our very own name service. Mint your custom name for your account.
+- Mina Fungible Tokens and NFTs support.
+
+## Architecture overview
+
+```mermaid
+flowchart LR
+  U((User))
+  PWA[SvelteKit PWA\n+ ORPC API]
+  R[Runner App\n(bullmq workers + o1js)]
+  SQL[(SQLite)]
+  REDIS[(Redis\n(bullmq))]
+
+  %% Core interactions
+  U --> PWA
+  PWA <-->|CRUD: users, accounts, passkeys| SQL
+
+  %% Job flow
+  PWA -->|enqueue job| REDIS
+  R -->|consume job| REDIS
+  R -->|publish progress/result| REDIS
+  PWA -->|subscribe/read progress| REDIS
+
+  %% Persist results
+  PWA -->|write final state| SQL
 ```
 
-## Developing
+## Development
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+### Prerequisite
 
-```sh
-npm run dev
+- [Bun](https://bun.sh/)
+- [Node.js](https://nodejs.org/)
+- Local instance of Redis
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
+### Setup
 
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+1. Clone the repo and enter it.
+2. Install the dependencies:
+   ```sh
+   bun i
+   ```
+3. Migrate the database:
+   ```sh
+   bun run db:migrate
+   ```
+4. Start the dev server:
+   ```sh
+   bun run web:dev
+   ```

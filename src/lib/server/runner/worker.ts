@@ -7,7 +7,7 @@ import { Mina, Poseidon, PrivateKey, type NetworkId } from 'o1js';
 
 const FEE = 1e8;
 const MINA_GQL_DEVNET_URL = 'https://api.minascan.io/node/devnet/v1/graphql';
-const MINA_GQL_MAINNET_URK = 'https://api.minascan.io/node/mainnet/v1/graphql';
+// const MINA_GQL_MAINNET_URK = 'https://api.minascan.io/node/mainnet/v1/graphql';
 
 const connection = new IORedis({ maxRetriesPerRequest: null, port: 6379 });
 

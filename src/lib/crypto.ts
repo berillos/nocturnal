@@ -1,4 +1,4 @@
-import { Base64, Bytes, Hash, Hex, PublicKey, Signature } from 'ox';
+import { Base64, Bytes, Hash, Hex, Signature } from 'ox';
 import { decode as cborDecode, encode as cborEncode } from 'cborg';
 import type { SignMetadata } from 'ox/WebAuthnP256';
 
