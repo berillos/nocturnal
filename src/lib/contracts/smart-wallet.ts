@@ -20,31 +20,59 @@ import {
 export class Secp256r1 extends createForeignCurve(Crypto.CurveParams.Secp256r1) {}
 export class EcdsaP256 extends createEcdsa(Secp256r1) {}
 
-/* ------------ Typed op ------------ */
-export class Operation extends Struct({
-	nonce: UInt32, // wallet-level replay protection
-	expirySlot: UInt32 // TTL (compare against current slot)
+const BaseOperation = {
+	nonce: UInt32,
+	expirySlot: UInt32
+};
+
+export class SendOperation extends Struct({
+	...BaseOperation,
+	amount: UInt64,
+	receiver: PublicKey
 }) {}
+
+export class StakeOperation extends Struct({
+	...BaseOperation,
+	validator: PublicKey
+}) {}
+
+export class ApproveUpdateOperation extends Struct({
+	...BaseOperation,
+	update: AccountUpdate
+}) {}
+
+export class RotateOwnerOperation extends Struct({
+	...BaseOperation,
+	newOwnerCommit: Field
+}) {}
+
+export class Authentication extends Struct({
+	payload: Secp256r1.Scalar,
+	signature: EcdsaP256,
+	publicKey: Secp256r1
+}) {
+	verify() {
+		this.signature.verifySignedHash(this.payload, this.publicKey).assertTrue();
+	}
+}
 
 /* ------------ Events ------------ */
 export class MinaSentEvent extends Struct({
-	amount: UInt64,
-	receiver: PublicKey,
-	expirySlot: UInt32,
-	nonce: UInt32
+	operation: SendOperation
 }) {}
+
 export class UpdateApprovedEvent extends Struct({
-	nonce: UInt32,
-	expirySlot: UInt32
+	operation: BaseOperation
 }) {}
+
 export class OwnerRotatedEvent extends Struct({
-	oldOwnerHash: Field,
-	newOwnerHash: Field,
-	nonce: UInt32
+	operation: RotateOwnerOperation,
+	prevOwnerCommit: Field
 }) {}
+
 export class ValidatorChangedEvent extends Struct({
-	oldValidator: PublicKey,
-	newValidator: PublicKey
+	operation: StakeOperation,
+	prevValidator: PublicKey
 }) {}
 
 /* ============================================================
@@ -95,87 +123,61 @@ export class SmartWallet extends SmartContract {
 		});
 	}
 
-	@method async validateAndSend(
-		op: Operation,
-		owner: Secp256r1,
-		// @ts-expect-error needs to be done this way, won't work with AlmostForeignField
-		payload: Secp256r1.Scalar,
-		signature: EcdsaP256,
-		receiver: PublicKey,
-		amount: UInt64
-	) {
-		this.assertOwner(owner);
-		this.account.nonce.requireEquals(op.nonce);
-		this.assertExpiry(op.expirySlot);
-		signature.verifySignedHash(payload, owner).assertTrue();
-		this.send({ to: receiver, amount });
-		this.emitEvent(
-			'minaSent',
-			new MinaSentEvent({ amount, receiver, nonce: op.nonce, expirySlot: op.expirySlot })
-		);
+	@method async validateAndSend(authentication: Authentication, operation: SendOperation) {
+		this.assertOwner(authentication.publicKey);
+		this.account.nonce.requireEquals(operation.nonce);
+		this.assertExpiry(operation.expirySlot);
+		authentication.verify();
+		this.send({ to: operation.receiver, amount: operation.amount });
+		this.emitEvent('minaSent', new MinaSentEvent({ operation }));
 	}
 
 	@method async validateAndChangeValidator(
-		op: Operation,
-		owner: Secp256r1,
-		// @ts-expect-error needs to be done this way, won't work with AlmostForeignField
-		payload: Secp256r1.Scalar,
-		signature: EcdsaP256,
-		validator: PublicKey
+		authentication: Authentication,
+		operation: StakeOperation
 	) {
-		this.assertOwner(owner);
-		this.account.nonce.requireEquals(op.nonce);
-		this.assertExpiry(op.expirySlot);
-		signature.verifySignedHash(payload, owner).assertTrue();
+		this.assertOwner(authentication.publicKey);
+		this.account.nonce.requireEquals(operation.nonce);
+		this.assertExpiry(operation.expirySlot);
+		authentication.verify();
 		this.account.delegate.requireEquals(this.account.delegate.get());
-		const oldValidator = this.account.delegate.get();
-		this.account.delegate.set(validator);
+		const prevValidator = this.account.delegate.get();
+		this.account.delegate.set(operation.validator);
 		this.emitEvent(
 			'validatorChanged',
 			new ValidatorChangedEvent({
-				oldValidator: oldValidator,
-				newValidator: validator
+				operation,
+				prevValidator
 			})
 		);
 	}
 
 	@method async validateAndApproveUpdate(
-		op: Operation,
-		owner: Secp256r1,
-		// @ts-expect-error needs to be done this way, won't work with AlmostForeignField
-		payload: Secp256r1.Scalar,
-		signature: EcdsaP256,
-		child: AccountUpdate
+		authentication: Authentication,
+		operation: ApproveUpdateOperation
 	) {
-		this.assertOwner(owner);
-		this.account.nonce.requireEquals(op.nonce);
-		this.assertExpiry(op.expirySlot);
-		signature.verifySignedHash(payload, owner).assertTrue();
-		this.approve(child);
-		this.emitEvent(
-			'updateApproved',
-			new UpdateApprovedEvent({ nonce: op.nonce, expirySlot: op.expirySlot })
-		);
+		this.assertOwner(authentication.publicKey);
+		this.account.nonce.requireEquals(operation.nonce);
+		this.assertExpiry(operation.expirySlot);
+		authentication.verify();
+		this.approve(operation.update);
+		this.emitEvent('updateApproved', new UpdateApprovedEvent({ operation }));
 	}
 
 	@method async validateAndRotateOwner(
-		op: Operation,
-		owner: Secp256r1,
-		payload: Secp256r1.Scalar,
-		signature: EcdsaP256,
-		newOwnerHash: Field
+		authentication: Authentication,
+		operation: RotateOwnerOperation
 	) {
-		const oldHash = this.assertOwner(owner);
-		this.account.nonce.requireEquals(op.nonce);
-		this.assertExpiry(op.expirySlot);
-		signature.verifySignedHash(payload, owner).assertTrue();
-		this.ownerCommit.set(newOwnerHash);
+		const prevOwnerCommit = this.assertOwner(authentication.publicKey);
+		this.account.nonce.requireEquals(operation.nonce);
+		this.assertExpiry(operation.expirySlot);
+		authentication.verify();
+		this.ownerCommit.set(operation.newOwnerCommit);
 		this.emitEvent(
 			'ownerRotated',
 			new OwnerRotatedEvent({
-				oldOwnerHash: oldHash,
-				newOwnerHash: newOwnerHash,
-				nonce: op.nonce
+				operation,
+				prevOwnerCommit
 			})
 		);
 	}

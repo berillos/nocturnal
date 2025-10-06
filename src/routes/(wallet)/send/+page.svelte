@@ -1,10 +1,16 @@
 <script lang="ts">
 	import WalletHeader from '$lib/components/wallet-header.svelte';
+	import * as Ox from 'ox';
 	import { createForm } from 'felte';
 	import { validator } from '@felte/validator-zod';
 	import { theme } from 'mode-watcher';
 	import { z } from 'zod';
 	import { fly } from 'svelte/transition';
+	import { apiOrpc } from '$lib/orpc-client';
+	import { exportFromCose, toPlainP256 } from '$lib/crypto';
+	import type { PageProps } from './$types';
+
+	let { data }: PageProps = $props();
 
 	const SendSchema = z.object({
 		to: z.string(),
@@ -13,7 +19,11 @@
 		amount: z.coerce.number().min(0)
 	});
 
-	const { form, data, setData } = createForm<z.infer<typeof SendSchema>>({
+	const {
+		form,
+		data: formData,
+		setData
+	} = createForm<z.infer<typeof SendSchema>>({
 		extend: validator({ schema: SendSchema }),
 		initialValues: {
 			sendMode: 'token',
@@ -23,6 +33,26 @@
 			console.log(values);
 		}
 	});
+
+	async function buildTestPayload() {
+		// TODO: Change it to current wallet passkey mapping.
+		const currentPasskey = data.passkeys[0];
+		const publicKeyRaw = await exportFromCose(Ox.Base64.toBytes(currentPasskey.publicKey));
+		const publicKey = Ox.PublicKey.from(publicKeyRaw);
+		console.log('>>>PUBKEY', publicKey, Ox.PublicKey.toHex(publicKey));
+		const challenge = await apiOrpc.wallet.buildPayload({ nonce: 0, expirySlot: 20 });
+		console.log('>>>CHALLENGE', challenge);
+		const signature = await Ox.WebAuthnP256.sign({
+			challenge
+		});
+		const plainP256 = toPlainP256({
+			challenge,
+			signature: signature.signature,
+			metadata: signature.metadata
+		});
+		console.log('>>>PAYLOAD', plainP256!.payload, Ox.Hex.fromBytes(plainP256!.payload));
+		console.log('>>>SIGNATURE', plainP256!.signature, Ox.Signature.toHex(plainP256!.signature));
+	}
 </script>
 
 <svelte:head>
@@ -40,7 +70,7 @@
 			<input type="text" name="to" placeholder="Recipient Address" />
 			<button class="btn btn-sm btn-primary">Paste</button>
 		</label>
-		{#if $data.to && !$data.token}
+		{#if $formData.to && !$formData.token}
 			<div class="tabs-lift tabs w-full" in:fly out:fly={{ duration: 0 }}>
 				<label class="tab font-semibold">
 					<input type="radio" name="sendMode" value="token" />
@@ -50,7 +80,7 @@
 					<div class="flex flex-col">
 						<button
 							class="btn justify-start gap-2 bg-base-100 p-2"
-							onclick={() => setData({ ...$data, token: 'mina' })}
+							onclick={() => setData({ ...$formData, token: 'mina' })}
 						>
 							{#if theme.current === 'dark'}
 								<img src="/mina-icon.svg" class="h-8 w-8 invert" />
@@ -69,16 +99,19 @@
 				<div class="tab-content border-base-300 bg-base-100 p-4">No collectibles found.</div>
 			</div>
 		{/if}
-		{#if $data.to && $data.token}
+		{#if $formData.to && $formData.token}
 			<label
 				class="validator input input-lg w-full border-base-300 px-4 focus-within:outline-none"
 				transition:fly
 			>
-				<button class="btn btn-sm" onclick={() => setData({ ...$data, token: null })}>Mina</button>
+				<button class="btn btn-sm" onclick={() => setData({ ...$formData, token: null })}
+					>Mina</button
+				>
 				<input class="text-center text-3xl font-semibold" type="number" placeholder="0.00" />
 				<button class="btn btn-sm">Max</button>
 			</label>
 			<button class="btn btn-lg btn-primary">Next</button>
 		{/if}
 	</form>
+	<button class="btn" onclick={buildTestPayload}>TODO: Remove it</button>
 </div>

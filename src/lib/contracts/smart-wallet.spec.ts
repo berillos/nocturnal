@@ -1,6 +1,13 @@
 import { beforeAll, describe, expect, it } from 'bun:test';
-import { AccountUpdate, Mina, Poseidon, UInt32, UInt64 } from 'o1js';
-import { EcdsaP256, Operation, Secp256r1, SmartWallet } from './smart-wallet';
+import { Mina, Poseidon, UInt32, UInt64 } from 'o1js';
+import {
+	Authentication,
+	EcdsaP256,
+	Secp256r1,
+	SendOperation,
+	SmartWallet,
+	StakeOperation
+} from './smart-wallet';
 import * as Ox from 'ox';
 
 // Needs to be on since the smart wallet depends on proofs.
@@ -66,15 +73,22 @@ describe('Smart Wallet', () => {
 		async () => {
 			const amount = UInt64.from(1_000_000_000n);
 			const now = Mina.getNetworkState().globalSlotSinceGenesis;
-			const op = new Operation({
-				nonce: Mina.getAccount(zkAppKey).nonce, // must match L1 zkApp nonce
+			const operation = new SendOperation({
+				receiver: recipient,
+				amount,
+				nonce: Mina.getAccount(zkAppKey).nonce,
 				expirySlot: now.add(UInt32.from(20))
 			});
-			const msgHashHex = Ox.Hash.sha256(PAYLOAD); // 32-byte digest as hex
+			const msgHashHex = Ox.Hash.sha256(PAYLOAD);
 			const payload = Secp256r1.Scalar.from(Ox.Bytes.toBigInt(Ox.Bytes.fromHex(msgHashHex)));
 			const signature = EcdsaP256.from(Ox.Signature.fromHex(SIGNATURE));
+			const authentication = new Authentication({
+				payload,
+				signature,
+				publicKey: owner
+			});
 			const paymentTx = await Mina.transaction({ sender: feePayer, fee: FEE }, async () => {
-				await smartWallet.validateAndSend(op, owner, payload, signature, recipient, amount);
+				await smartWallet.validateAndSend(authentication, operation);
 			});
 			await paymentTx.prove();
 			const txState = await paymentTx.sign([feePayer.key]).send();
@@ -88,10 +102,9 @@ describe('Smart Wallet', () => {
 	it(
 		'stakes Mina to validator',
 		async () => {
-			const child = AccountUpdate.create(validator);
-			child.account.delegate.set(validator);
 			const now = Mina.getNetworkState().globalSlotSinceGenesis;
-			const op = new Operation({
+			const operation = new StakeOperation({
+				validator,
 				nonce: Mina.getAccount(zkAppKey).nonce,
 				expirySlot: now.add(UInt32.from(21))
 			});
@@ -99,8 +112,13 @@ describe('Smart Wallet', () => {
 				Ox.Bytes.toBigInt(Ox.Bytes.fromHex(Ox.Hash.sha256(PAYLOAD)))
 			);
 			const signature = EcdsaP256.from(Ox.Signature.fromHex(SIGNATURE));
+			const authentication = new Authentication({
+				payload,
+				signature,
+				publicKey: owner
+			});
 			const stakeTx = await Mina.transaction({ sender: feePayer, fee: FEE }, async () => {
-				await smartWallet.validateAndChangeValidator(op, owner, payload, signature, validator);
+				await smartWallet.validateAndChangeValidator(authentication, operation);
 			});
 			await stakeTx.prove();
 			await stakeTx.sign([feePayer.key]).send();
