@@ -1,5 +1,6 @@
 <script lang="ts">
 	import WalletHeader from '$lib/components/wallet-header.svelte';
+	import WalletReceiveDialog from '$lib/components/wallet-receive-dialog.svelte';
 	import { ArrowDownLeftIcon, ArrowUpRightIcon } from 'lucide-svelte';
 </script>
 
@@ -9,15 +10,7 @@
 
 <WalletHeader title="Dashboard" />
 
-<dialog id="depositModal" class="modal">
-	<div class="modal-box">
-		<h3 class="text-lg font-bold">Hello!</h3>
-		<p class="py-4">Press ESC key or click outside to close</p>
-	</div>
-	<form method="dialog" class="modal-backdrop">
-		<button>close</button>
-	</form>
-</dialog>
+<WalletReceiveDialog />
 
 <div class="grid grid-cols-2 gap-4 p-4">
 	<div class="card bg-base-200 shadow-sm">
