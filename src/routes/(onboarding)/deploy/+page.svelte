@@ -24,7 +24,7 @@
 			if (result?.error) {
 				return toast.error(result.error.message ?? 'Passkey Error');
 			}
-			return goto('/deploy');
+			// await deployWallet();
 		} catch (error) {
 			viewState = 'idle';
 			if (error instanceof Error) {
@@ -60,7 +60,7 @@
 	onMount(() => {
 		console.log(data.existingWallet);
 		if (viewState === 'waitingForDeployment' && !data.existingWallet) {
-			deployWallet();
+			// deployWallet();
 		}
 	});
 </script>

@@ -5,9 +5,10 @@
 			"networkId": "testnet",
 			"url": "https://api.minascan.io/node/devnet/v1/graphql",
 			"keyPath": "keys/berillos-smart-wallet.json",
-			"feepayerKeyPath": "/home/ryuz/Boxes/arch/.cache/zkapp-cli/keys/berillos-fee-payer.json",
+			"feepayerKeyPath": "keys/berillos-smart-wallet.json",
 			"feepayerAlias": "berillos-fee-payer",
-			"fee": "0.1"
+			"fee": "0.1",
+			"smartContract": "SmartWallet"
 		}
 	}
 }
